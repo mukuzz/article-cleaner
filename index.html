@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Article Cleaner</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #2c3e50;
+        }
+        
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .input-area {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            min-height: 150px;
+            background-color: #f9f9f9;
+        }
+        
+        .output-area {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 20px;
+            min-height: 300px;
+            background-color: #fff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background-color: #2980b9;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        
+        .output-area h2 {
+            color: #2c3e50;
+            margin-top: 0;
+        }
+        
+        .output-area p {
+            margin-bottom: 1em;
+        }
+    </style>
+</head>
+<body>
+    <h1>Article Cleaner</h1>
+    
+    <div class="container">
+        <div class="input-area" id="pasteArea" contenteditable="true">Paste article content here...</div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const pasteArea = document.getElementById('pasteArea');
+            
+            // Handle paste event
+            pasteArea.addEventListener('paste', (e) => {
+                // Prevent the default paste
+                e.preventDefault();
+                
+                // Get the pasted content as plain text
+                const text = e.clipboardData.getData('text/plain');
+                
+                // Clean and set the content
+                const cleanedContent = cleanArticle(text);
+                pasteArea.innerHTML = cleanedContent;
+            });
+            
+            // Clean article function
+            function cleanArticle(content) {
+                // Create a temporary div to work with the HTML content
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = content;
+                
+                // First pass: Remove obviously unwanted elements
+                const unwantedElements = [
+                    'script', 'style', 'iframe', 'noscript', 'svg', 
+                    'form', 'input', 'button', 'nav', 'header', 'footer',
+                    'aside', 'ad', '.ad', '.advertisement', '.banner',
+                    'img', 'figure', 'figcaption', 'video', 'audio',
+                    'meta', 'link', '#comments', '.comments', '.social-share',
+                    '.related-articles', '.sidebar', '.menu', '.navigation',
+                    '[class*="cookie"]', '[class*="popup"]', '[id*="popup"]',
+                    '[class*="newsletter"]', '[class*="subscribe"]'
+                ];
+                
+                unwantedElements.forEach(selector => {
+                    const elements = tempDiv.querySelectorAll(selector);
+                    elements.forEach(el => el.remove());
+                });
+
+                // Second pass: Try to identify the main content
+                let mainContent = null;
+
+                // Check for common article containers
+                const articleSelectors = [
+                    'article',
+                    '[role="main"]',
+                    'main',
+                    '.post-content',
+                    '.article-content',
+                    '.entry-content',
+                    '.content-area',
+                    '#article-body',
+                    '.story-body',
+                    '.post-body'
+                ];
+
+                for (const selector of articleSelectors) {
+                    const element = tempDiv.querySelector(selector);
+                    if (element) {
+                        mainContent = element;
+                        break;
+                    }
+                }
+
+                // If no main content container found, use heuristics
+                if (!mainContent) {
+                    // Find the element with the most paragraphs
+                    const containers = tempDiv.querySelectorAll('div');
+                    let maxParagraphs = 0;
+                    
+                    containers.forEach(container => {
+                        const paragraphCount = container.querySelectorAll('p').length;
+                        if (paragraphCount > maxParagraphs) {
+                            maxParagraphs = paragraphCount;
+                            mainContent = container;
+                        }
+                    });
+                }
+
+                // If still no main content, fall back to the whole body
+                mainContent = mainContent || tempDiv;
+
+                // Third pass: Clean the selected content
+                let cleanText = '';
+
+                // Get the title if available
+                const title = tempDiv.querySelector('h1');
+                if (title) {
+                    const titleText = title.textContent.trim();
+                    if (titleText) {
+                        cleanText += `<h1>${titleText}</h1>\n`;
+                    }
+                }
+
+                // Process content
+                const elements = mainContent.children;
+                for (const element of elements) {
+                    if (element.tagName.match(/^H[1-6]$/)) {
+                        // Keep headings
+                        const text = element.textContent.trim();
+                        if (text) {
+                            cleanText += `<${element.tagName.toLowerCase()}>${text}</${element.tagName.toLowerCase()}>\n`;
+                        }
+                    } else if (element.tagName === 'P') {
+                        // Keep paragraphs that look like content
+                        const text = element.textContent.trim();
+                        if (text && text.length > 20 && !text.includes('©') && !text.match(/^(Share|Posted|Published|Updated|By)/i)) {
+                            cleanText += `<p>${text}</p>\n`;
+                        }
+                    }
+                }
+
+                // If no structured content was found, try to extract meaningful text
+                if (!cleanText) {
+                    const textContent = mainContent.textContent
+                        .replace(/\s+/g, ' ')
+                        .trim()
+                        .split(/(?<=[.!?])\s+/);
+
+                    cleanText = textContent
+                        .filter(sentence => sentence.length > 30)
+                        .map(sentence => `<p>${sentence.trim()}</p>`)
+                        .join('\n');
+                }
+
+                return cleanText || '<p>No article content found.</p>';
+            }
+        });
+    </script>
+</body>
+</html> 
