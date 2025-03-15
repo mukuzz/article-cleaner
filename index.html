@@ -32,6 +32,14 @@
             padding: 15px;
             min-height: 150px;
             background-color: #f9f9f9;
+            position: relative;
+        }
+        
+        .input-area[data-placeholder]:empty:before {
+            content: attr(data-placeholder);
+            color: #999;
+            position: absolute;
+            pointer-events: none;
         }
         
         .output-area {
@@ -78,7 +86,7 @@
     <h1>Article Cleaner</h1>
     
     <div class="container">
-        <div class="input-area" id="pasteArea" contenteditable="true">Paste article content here...</div>
+        <div class="input-area" id="pasteArea" contenteditable="true" data-placeholder="Paste article content here..."></div>
     </div>
 
     <script>
